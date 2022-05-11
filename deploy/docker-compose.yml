@@ -1,0 +1,86 @@
+version: "3.7"
+
+services:
+
+  ### Anwendung ###
+
+  JexxaTemplate: # TODO: Change <ProjectName> (CamelCase)
+    image: ghcr.io/jexxa-projects/jexxatemplate:latest # TODO: change image location ghcr.io/shs-it/<projectname>:latest
+    ports:
+      - "7501:7500" # TODO: Adjust HTTP Port "<free HTTP-Port>:7500"
+    depends_on:
+      - ActiveMQ
+      - Postgres
+    secrets:
+      - jndiUser
+      - jndiPassword
+      - jdbcUser
+      - jdbcPassword
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -nv -t1 --spider 'http://localhost:7500/BoundedContext/isRunning/'"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+
+    deploy:
+      replicas: 2
+      update_config:
+        order: start-first        # Configure rolling updates
+        failure_action: rollback
+
+      rollback_config:
+        parallelism: 1            # Rollback config
+        order: start-first
+
+      restart_policy:
+        condition: on-failure
+
+
+
+  ### Infrastruktur ###
+
+  ActiveMQ:
+    image: rmohr/activemq
+    #restart: always
+    secrets:
+      - jndiUser
+      - jndiPassword
+    ports:
+      - "62616:61616" # TODO: Adjust Port"<free Port>:61616"
+      - "8261:8161" # TODO: Adjust Port"<free Port>:8161"
+
+  Postgres:
+    image: postgres:14.0-alpine
+    #restart: always
+    user: postgres
+    secrets:
+      - jdbcUser
+      - jdbcPassword
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432" # TODO: Adjust Port "<free Port>:5432"
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/jdbcPassword
+      POSTGRES_USER_FILE: /run/secrets/jdbcUser
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+
+secrets:
+  jndiPassword:
+    external: true
+  jndiUser:
+    external: true
+
+  jdbcUser:
+    external: true
+  jdbcPassword:
+    external: true
